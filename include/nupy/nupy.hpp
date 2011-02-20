@@ -8,7 +8,7 @@
 #define NUPY_BEGIN(C)
 #define NUPY_END()
 #define NUPY_BASE(C)
-#define NUPY_MEMBER(m) m
+#define NUPY_MEMBER(M) M
 
 #else
 
@@ -18,6 +18,7 @@
 #include <boost/mpl/eval_if.hpp>
 #include <boost/preprocessor/cat.hpp>
 #include <boost/static_assert.hpp>
+#include <boost/type_traits/is_floating_point.hpp>
 #include <boost/type_traits/is_integral.hpp>
 #include <boost/utility/enable_if.hpp>
 
@@ -78,10 +79,14 @@ namespace nupy {
     inline typename boost::enable_if< boost::is_integral<T>, int >::type
     dtype_type(T C::*, char* buf, size_t sz)
     {
-        BOOST_STATIC_ASSERT(sizeof(T) <= 9); /* single digit */
-        static char const s[] = {
-            '\'', NUPY_ENDIAN_SYM, 'i', '0' + sizeof(T), '\'', '\0' };
-        return snprintf(buf, sz, "%s", s);
+        return snprintf(buf, sz, "'%ci%d'", NUPY_ENDIAN_SYM, sizeof(T));
+    }
+
+    template<class C, class T>
+    inline typename boost::enable_if< boost::is_floating_point<T>, int >::type
+    dtype_type(T C::*, char* buf, size_t sz)
+    {
+        return snprintf(buf, sz, "'%cf%d'", NUPY_ENDIAN_SYM, sizeof(T));
     }
 
     template<class C, int N>
@@ -188,12 +193,12 @@ namespace nupy {
     static int nupy_dtype(char* buf, size_t sz, size_t varlen = 0 ) \
     { return ::nupy::dtype_begin<C,__LINE__>(buf, sz, varlen); }
 
-#define NUPY_MEMBER(m) static BOOST_PP_CAT(_nupy_member_,__LINE__)(); \
+#define NUPY_MEMBER(M) static BOOST_PP_CAT(_nupy_member_,__LINE__)(); \
     void _nupy_line( ::nupy::line<__LINE__> ); \
     static int \
     _nupy_do( ::nupy::line<__LINE__> l, char* buf, size_t sz, size_t varlen) \
-    { return ::nupy::dtype_member(l, &_nupy_this::m, #m, buf, sz, varlen); } \
-    __typeof__(_nupy_this::BOOST_PP_CAT(_nupy_member_,__LINE__)()) m
+    { return ::nupy::dtype_member(l, &_nupy_this::M, #M, buf, sz, varlen); } \
+    __typeof__(_nupy_this::BOOST_PP_CAT(_nupy_member_,__LINE__)()) M
 
 #define NUPY_END() enum { _nupy_end = __LINE__ }; \
     void _nupy_line( ::nupy::line<__LINE__> ); \
