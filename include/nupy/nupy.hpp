@@ -63,33 +63,19 @@ namespace nupy {
         enum { value = L };
     };
 
-    template<class T>
-    struct add_noline : T
-    {
-        using T::_nupy_line;
-        void _nupy_line(noline);
-    };
-
     template<class L>
     struct line_tester
     {
         BOOST_STATIC_ASSERT(sizeof(long) != sizeof(char));
 
-        template<class T>
-        static char test(void (T::*)(noline), ...);
-
-        template<class T>
-        static long test(void (T::*)(L), int);
+        static char test(int (*)(noline), ...);
+        static long test(int (*)(L, char*, size_t, size_t), int);
     };
 
     template<class T, class L>
     struct has_line
     {
-        enum
-        {
-            value = sizeof(
-                line_tester<L>::test(&add_noline<T>::_nupy_line, 0)) != 1
-        };
+        enum { value = sizeof(line_tester<L>::test(&T::_nupy_line, 0)) != 1 };
         typedef has_line type;
     };
 
@@ -124,11 +110,14 @@ namespace nupy {
         return snprintf(buf, sz, "'|S%d'", N);
     }
 
-    /* T class declaration starts at line L */
-    template<class T, int L>
+    /* C class declaration starts at line L */
+    template<class C, int L>
     int
     dtype_begin(char* buf, size_t sz, size_t varlen)
     {
+        /* check for the end early */
+        BOOST_STATIC_ASSERT(C::_nupy_end > L);
+
         int len = snprintf(buf, sz, "%c", '[');
 
         if(len < 0) {
@@ -141,11 +130,8 @@ namespace nupy {
             sz  = 0;
         }
 
-        /* check for the end early */
-        BOOST_STATIC_ASSERT(T::_nupy_end > L);
-
-        typename next_line< T, line<L> >::type next;
-        int tail = T::_nupy_do(next, buf, sz, varlen);
+        typename next_line< C, line<L> >::type next;
+        int tail = C::_nupy_line(next, buf, sz, varlen);
         return tail < 0 ? tail : len + tail;
     }
 
@@ -193,7 +179,7 @@ namespace nupy {
         int len = len1 + len2 + len3;
 
         typename next_line< C, line<L> >::type next;
-        int tail = C::_nupy_do(next, buf, sz, varlen);
+        int tail = C::_nupy_line(next, buf, sz, varlen);
         return tail < 0 ? tail : len + tail;
     }
 
@@ -217,21 +203,21 @@ namespace nupy {
 }
 
 #define NUPY_BEGIN(C) \
-    typedef C _nupy_this; \
-    static int nupy_dtype(char* buf, size_t sz, size_t varlen = 0 ) \
+    typedef C _nupy_this; static int _nupy_line( ::nupy::noline ); \
+    static int nupy_dtype(char* buf, size_t sz, size_t varlen = 0) \
     { return ::nupy::dtype_begin<C,__LINE__>(buf, sz, varlen); }
 
-#define NUPY_MEMBER(M) static BOOST_PP_CAT(_nupy_member_,__LINE__)(); \
-    void _nupy_line( ::nupy::line<__LINE__> ); \
+#define NUPY_MEMBER(M) \
+    static BOOST_PP_CAT(_nupy_member_,__LINE__)(); \
     static int \
-    _nupy_do( ::nupy::line<__LINE__> l, char* buf, size_t sz, size_t varlen) \
+    _nupy_line( ::nupy::line<__LINE__> l, char* buf, size_t sz, size_t varlen) \
     { return ::nupy::dtype_member(l, &_nupy_this::M, #M, buf, sz, varlen); } \
     __typeof__(_nupy_this::BOOST_PP_CAT(_nupy_member_,__LINE__)()) M
 
-#define NUPY_END() enum { _nupy_end = __LINE__ }; \
-    void _nupy_line( ::nupy::line<__LINE__> ); \
+#define NUPY_END() \
+    enum { _nupy_end = __LINE__ }; \
     static int \
-    _nupy_do( ::nupy::line<__LINE__>, char* buf, size_t sz, size_t) \
+    _nupy_line( ::nupy::line<__LINE__>, char* buf, size_t sz, size_t) \
     { return ::nupy::dtype_end(buf, sz); }
 
 #endif /* #if !defined(__cplusplus) */
