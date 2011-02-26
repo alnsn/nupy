@@ -44,10 +44,17 @@
 #include <stdio.h>
 
 #include <boost/mpl/eval_if.hpp>
+#include <boost/mpl/identity.hpp>
 #include <boost/preprocessor/cat.hpp>
 #include <boost/static_assert.hpp>
+#include <boost/type_traits/extent.hpp>
 #include <boost/type_traits/is_floating_point.hpp>
 #include <boost/type_traits/is_integral.hpp>
+#include <boost/type_traits/is_same.hpp>
+#include <boost/type_traits/is_signed.hpp>
+#include <boost/type_traits/rank.hpp>
+#include <boost/type_traits/remove_all_extents.hpp>
+#include <boost/type_traits/remove_cv.hpp>
 #include <boost/utility/enable_if.hpp>
 
 #define NUPY_ENDIAN_SYM '<'
@@ -69,7 +76,7 @@ namespace nupy {
         BOOST_STATIC_ASSERT(sizeof(long) != sizeof(char));
 
         static char test(int (*)(noline), ...);
-        static long test(int (*)(L, char*, size_t, size_t), int);
+        static long test(int (*)(L, char*, size_t), int);
     };
 
     template<class T, class L>
@@ -89,136 +96,305 @@ namespace nupy {
     {
     };
 
-    template<class C, class T>
-    inline typename boost::enable_if< boost::is_integral<T>, int >::type
-    dtype_type(T C::*, char* buf, size_t sz)
+    /* 
+     * cv char[4][2] -> char[2]
+     * cv char[2]    -> char[2]
+     * cv char       -> char[1]
+     */
+    template<class T>
+    struct basic_str_type
     {
-        return snprintf(buf, sz, "'%ci%d'", NUPY_ENDIAN_SYM, sizeof(T));
-    }
+        typedef typename boost::rank<T>::type rank;
+        typedef typename boost::extent<T,(rank::value-1)>::type last_extent;
+        typedef char type[(last_extent::value ? last_extent::value : 1)];
+    };
 
-    template<class C, class T>
-    inline typename boost::enable_if< boost::is_floating_point<T>, int >::type
-    dtype_type(T C::*, char* buf, size_t sz)
+    /* 
+     * Remove cv-qualifiers and extra extents, e.g.
+     * volatile int[4][2] -> int
+     * char[4][2][8]      -> char[8]
+     */
+    template<class T>
+    struct basic_type
     {
-        return snprintf(buf, sz, "'%cf%d'", NUPY_ENDIAN_SYM, sizeof(T));
-    }
+        typedef typename boost::remove_all_extents<T>::type scalar;
+        typedef typename boost::remove_cv<scalar>::type nocv;
 
-    template<class C, int N>
-    inline int
-    dtype_type(char (C::*)[N], char* buf, size_t sz)
+        typedef typename boost::mpl::eval_if<
+            boost::is_same<nocv,char>,
+            basic_str_type<T>,
+            boost::mpl::identity<nocv>
+            >::type type;
+    };
+
+    /* char[8] -> "'|S8'", T is a result of basic_type<U> */
+    template<class T, class Enable = void>
+    struct typestr
     {
-        return snprintf(buf, sz, "'|S%d'", N);
-    }
+        static int copy(char* buf, size_t bufsz)
+        {
+            return T::_nupy_dtype(buf, bufsz, true);
+        }
+    };
+
+    template<size_t N>
+    struct typestr<char[N],void>
+    {
+        static int copy(char* buf, size_t bufsz)
+        {
+            return snprintf(buf, bufsz, "'|S%zu'", N);
+        }
+    };
+
+    template<class T>
+    struct typestr< T
+                  , typename boost::enable_if<
+                            boost::is_integral<T>
+                        >::type
+                  >
+    {
+        static int copy(char* buf, size_t bufsz)
+        {
+            return snprintf(buf, bufsz, "'%c%c%zu'", NUPY_ENDIAN_SYM,
+                boost::is_signed<T>::value ? 'i' : 'u', sizeof(T));
+        }
+    };
+
+    template<class T>
+    struct typestr< T
+                  , typename boost::enable_if<
+                            boost::is_floating_point<T>
+                        >::type
+                  >
+    {
+        static int copy(char* buf, size_t bufsz)
+        {
+            return snprintf(buf, bufsz, "'%cf%zu'", NUPY_ENDIAN_SYM, sizeof(T));
+        }
+    };
+
+    /* Remove the last extent from cv char[A]...[Z] and calculate a rank */
+    template<class T>
+    struct type_rank
+    {
+        typedef typename boost::remove_all_extents<T>::type scalar;
+        typedef typename boost::remove_cv<scalar>::type nocv;
+
+        enum { rank = boost::rank<T>::value };
+        enum { ischararray = rank > 0 && boost::is_same<nocv,char>::value };
+        enum { value = rank - (ischararray ? 1 : 0) };
+    };
+
+    /*
+     * Copy a shape of T to buf, e.g. int[4][2] and char[4][2][8]
+     * will copy ",(4,2)" to buf
+     */
+    template< class T
+            , size_t N = 0                   /* Current dimension    */
+            , size_t R = type_rank<T>::value /* Remaining dimensions */
+            >
+    struct shapestr
+    {
+        static int copy(char* buf, size_t bufsz)
+        {
+            int len, rv = 0;
+
+            if(N == 0) {
+                if((len = snprintf(buf, bufsz, ",(")) < 0)
+                    return len;
+                rv += len;
+
+                if(len + 0u < bufsz) {
+                    buf += len;
+                    bufsz -= len;
+                } else {
+                    bufsz = 0;
+                }
+            }
+
+            char terminator = (R == 1) ? ')' : ',';
+            const size_t extent = boost::extent<T,N>::value;
+            if((len = snprintf(buf, bufsz, "%zu%c", extent, terminator)) < 0)
+                return len;
+            rv += len;
+
+            if(len + 0u < bufsz) {
+                buf += len;
+                bufsz -= len;
+            } else {
+                bufsz = 0;
+            }
+
+            if((len = shapestr<T,(N+1),(R-1)>::copy(buf, bufsz)) < 0)
+                return len;
+            rv += len;
+
+            return rv;
+        }
+    };
+
+    template<class T, size_t N>
+    struct shapestr<T,N,0>
+    {
+        static int copy(char* buf, size_t bufsz)
+        {
+            return 0;
+        }
+    };
 
     /* C class declaration starts at line L */
     template<class C, int L>
     int
-    dtype_begin(char* buf, size_t sz, size_t varlen)
+    dtype(char* buf, size_t bufsz, bool complete)
     {
+        int len, rv = 0;
+
         /* check for the end early */
-        BOOST_STATIC_ASSERT(C::_nupy_end > L);
+        boost::mpl::identity<typename C::_nupy_this> id;
+        C::_nupy_end(id);
 
-        int len = snprintf(buf, sz, "%c", '[');
+        if(complete) {
+            if((len = snprintf(buf, bufsz, "[")) < 0)
+                return len;
+            rv += len;
 
-        if(len < 0) {
-            return len;
-        } else if(len < sz) {
-            buf += len;
-            sz  -= len;
-        } else {
-            buf = NULL;
-            sz  = 0;
+            if(len + 0u < bufsz) {
+                buf += len;
+                bufsz -= len;
+            } else {
+                bufsz = 0;
+            }
         }
 
         typename next_line< C, line<L> >::type next;
-        int tail = C::_nupy_line(next, buf, sz, varlen);
-        return tail < 0 ? tail : len + tail;
+        if((len = C::_nupy_line(next, buf, bufsz)) < 0)
+            return len;
+        rv += len;
+
+        if(complete) {
+            if(len == 0) {
+                /* empty class => dtype = "[]" */
+                if((len = snprintf(buf, bufsz, "]")) < 0)
+                    return len;
+                rv += len;
+            } else if(len + 0u < bufsz) {
+                assert(buf[len - 1] == ',');
+                buf[len - 1] = ']';
+            }
+        }
+
+        return rv;
+    }
+
+    template<class C, class B, int L>
+    inline int
+    base(line<L>, char* buf, size_t bufsz)
+    {
+        int len, rv = 0;
+        
+        if((len = B::_nupy_dtype(buf, bufsz, false)) < 0)
+            return len;
+        rv += len;
+
+        if(len + 0u < bufsz) {
+            buf += len;
+            bufsz -= len;
+        } else {
+            bufsz = 0;
+        }
+
+        typename next_line< C, line<L> >::type next;
+        if((len = C::_nupy_line(next, buf, bufsz)) < 0)
+            return len;
+        rv += len;
+
+        return rv;
     }
 
     template<class C, class T, int L>
     inline int
-    dtype_member( line<L>, T C::* m, char const* member,
-                  char* buf, size_t sz, size_t varlen )
+    member(line<L>, T C::*, char const* name, char* buf, size_t bufsz)
     {
-        int len1 = snprintf(buf, sz, "('%s',", member);
+        int len, rv = 0;
+        
+        if((len = snprintf(buf, bufsz, "('%s',", name)) < 0)
+            return len;
+        rv += len;
 
-        if(len1 < 0) {
-            return len1;
-        } else if(len1 < sz) {
-            buf += len1;
-            sz  -= len1;
+        if(len + 0u < bufsz) {
+            buf += len;
+            bufsz -= len;
         } else {
-            buf = NULL;
-            sz  = 0;
+            bufsz = 0;
         }
 
-        int len2 = dtype_type(m, buf, sz);
+        typedef typename basic_type<T>::type basic;
+        if((len = typestr<basic>::copy(buf, bufsz)) < 0)
+            return len;
+        rv += len;
 
-        if(len2 < 0) {
-            return len2;
-        } else if(len2 < sz) {
-            buf += len2;
-            sz  -= len2;
+        if(len + 0u < bufsz) {
+            buf += len;
+            bufsz -= len;
         } else {
-            buf = NULL;
-            sz  = 0;
+            bufsz = 0;
         }
 
-        int len3 = snprintf(buf, sz, "),");
+        if((len = shapestr<T>::copy(buf, bufsz)) < 0)
+            return len;
+        rv += len;
 
-        if(len3 < 0) {
-            return len3;
-        } else if(len3 < sz) {
-            buf += len3;
-            sz  -= len3;
+        if(len + 0u < bufsz) {
+            buf += len;
+            bufsz -= len;
         } else {
-            buf = NULL;
-            sz  = 0;
+            bufsz = 0;
         }
 
-        int len = len1 + len2 + len3;
+        if((len = snprintf(buf, bufsz, "),")) < 0)
+            return len;
+        rv += len;
+
+        if(len + 0u < bufsz) {
+            buf += len;
+            bufsz -= len;
+        } else {
+            bufsz = 0;
+        }
 
         typename next_line< C, line<L> >::type next;
-        int tail = C::_nupy_line(next, buf, sz, varlen);
-        return tail < 0 ? tail : len + tail;
-    }
+        if((len = C::_nupy_line(next, buf, bufsz)) < 0)
+            return len;
+        rv += len;
 
-    inline int
-    dtype_end(char* buf, size_t sz)
-    {
-        int len = 0;
-
-        if(buf == NULL)
-            return 0;
-        
-        if(*(buf - 1) == ',') {
-            *(buf - 1) = ']';
-        } else {
-            assert(*(buf - 1) == '['); /* dtype == "[]" */
-            len = snprintf(buf, sz, "%c", ']');
-        }
-        
-        return len;
+        return rv;
     }
 }
 
 #define NUPY_BEGIN(C) \
     typedef C _nupy_this; static int _nupy_line( ::nupy::noline ); \
-    static int nupy_dtype(char* buf, size_t sz, size_t varlen = 0) \
-    { return ::nupy::dtype_begin<C,__LINE__>(buf, sz, varlen); }
+    static int _nupy_dtype(char* buf, size_t bufsz, bool complete) \
+    { return ::nupy::dtype<C,__LINE__>(buf, bufsz, complete); }    \
+    static int nupy_dtype(char* buf, size_t bufsz)                 \
+    { return _nupy_dtype(buf, bufsz, true); }
+
+#define NUPY_BASE(C) \
+    static int \
+    _nupy_line( ::nupy::line<__LINE__> l, char* buf, size_t bufsz) \
+    { return ::nupy::base<_nupy_this,C>(l, buf, bufsz); }
 
 #define NUPY_MEMBER(M) \
     static BOOST_PP_CAT(_nupy_member_,__LINE__)(); \
     static int \
-    _nupy_line( ::nupy::line<__LINE__> l, char* buf, size_t sz, size_t varlen) \
-    { return ::nupy::dtype_member(l, &_nupy_this::M, #M, buf, sz, varlen); } \
+    _nupy_line( ::nupy::line<__LINE__> l, char* buf, size_t bufsz) \
+    { return ::nupy::member(l, &_nupy_this::M, #M, buf, bufsz); }  \
     __typeof__(_nupy_this::BOOST_PP_CAT(_nupy_member_,__LINE__)()) M
 
 #define NUPY_END() \
-    enum { _nupy_end = __LINE__ }; \
+    static void _nupy_end( ::boost::mpl::identity<_nupy_this> ) {} \
     static int \
-    _nupy_line( ::nupy::line<__LINE__>, char* buf, size_t sz, size_t) \
-    { return ::nupy::dtype_end(buf, sz); }
+    _nupy_line( ::nupy::line<__LINE__>, char* buf, size_t bufsz) \
+    { return 0; }
 
 #endif /* #if !defined(__cplusplus) */
 

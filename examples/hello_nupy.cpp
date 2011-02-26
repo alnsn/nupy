@@ -7,8 +7,6 @@ struct Greeting
     char NUPY_MEMBER( greeting  ) [8];
     char NUPY_MEMBER( recipient ) [16];
 
-    int NUPY_MEMBER( dummy );
-
     NUPY_END()
 };
 
