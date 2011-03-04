@@ -43,10 +43,10 @@
 #include <assert.h>
 #include <stdio.h>
 
+#include <boost/mpl/assert.hpp>
 #include <boost/mpl/eval_if.hpp>
 #include <boost/mpl/identity.hpp>
 #include <boost/preprocessor/cat.hpp>
-#include <boost/static_assert.hpp>
 #include <boost/type_traits/extent.hpp>
 #include <boost/type_traits/is_floating_point.hpp>
 #include <boost/type_traits/is_integral.hpp>
@@ -70,29 +70,36 @@ namespace nupy {
         enum { value = L };
     };
 
-    template<class L>
-    struct line_tester
+    template<size_t N>
+    struct type_with_size
     {
-        BOOST_STATIC_ASSERT(sizeof(long) != sizeof(char));
-
-        static char test(int (*)(noline), ...);
-        static long test(int (*)(L, char*, size_t), int);
+        typedef char (&type)[N];
     };
 
-    template<class T, class L>
+    template<class C, class T>
+    typename type_with_size<sizeof(T)>::type
+    member_size(T C::*);
+
+    template<int L>
+    struct line_tester
+    {
+        static char test(int (*)(line<L>, char*, size_t), int);
+        static type_with_size<2>::type test(int (*)(noline), ...);
+    };
+
+    template<class T, int L>
     struct has_line
     {
-        enum { value = sizeof(line_tester<L>::test(&T::_nupy_line, 0)) != 1 };
+        enum { value = sizeof(line_tester<L>::test(&T::_nupy_line, 0)) == 1 };
         typedef has_line type;
     };
 
-    template<class T, class L>
+    template<class T, int L>
     struct next_line
-        : boost::mpl::eval_if<
-            has_line< T, line<(L::value+1)> >,
-            line<(L::value+1)>,
-            next_line< T, line<(L::value+1)> >
-        >
+        : boost::mpl::eval_if< has_line<T,(L+1)>
+                             , line<(L+1)>
+                             , next_line<T,(L+1)>
+                             >
     {
     };
 
@@ -266,7 +273,7 @@ namespace nupy {
             }
         }
 
-        typename next_line< C, line<L> >::type next;
+        typename next_line<C,L>::type next;
         if((len = C::_nupy_line(next, buf, bufsz)) < 0)
             return len;
         rv += len;
@@ -303,7 +310,7 @@ namespace nupy {
             bufsz = 0;
         }
 
-        typename next_line< C, line<L> >::type next;
+        typename next_line<C,L>::type next;
         if((len = C::_nupy_line(next, buf, bufsz)) < 0)
             return len;
         rv += len;
@@ -362,7 +369,7 @@ namespace nupy {
             bufsz = 0;
         }
 
-        typename next_line< C, line<L> >::type next;
+        typename next_line<C,L>::type next;
         if((len = C::_nupy_line(next, buf, bufsz)) < 0)
             return len;
         rv += len;
@@ -374,27 +381,42 @@ namespace nupy {
 #define NUPY_BEGIN(C) \
     typedef C _nupy_this; static int _nupy_line( ::nupy::noline ); \
     static int _nupy_dtype(char* buf, size_t bufsz, bool complete) \
-    { return ::nupy::dtype<C,__LINE__>(buf, bufsz, complete); }    \
+    { C::_nupy_size<0>( ::nupy::next_line<C,__LINE__>::type() );   \
+      return ::nupy::dtype<C,__LINE__>(buf, bufsz, complete); }    \
     static int nupy_dtype(char* buf, size_t bufsz)                 \
     { return _nupy_dtype(buf, bufsz, true); }
 
 #define NUPY_BASE(C) \
-    static int \
+    static int                                                     \
     _nupy_line( ::nupy::line<__LINE__> l, char* buf, size_t bufsz) \
-    { return ::nupy::base<_nupy_this,C>(l, buf, bufsz); }
+    { return ::nupy::base<_nupy_this,C>(l, buf, bufsz); }          \
+    template<size_t _nupySz>                                       \
+    static void _nupy_size( ::nupy::line<__LINE__> )               \
+    { _nupy_this::_nupy_size<(sizeof(C) + _nupySz)>(               \
+        ::nupy::next_line<_nupy_this,__LINE__>::type() ); }
 
 #define NUPY_MEMBER(M) \
-    static BOOST_PP_CAT(_nupy_member_,__LINE__)(); \
-    static int \
+    static BOOST_PP_CAT(_nupy_member_,__LINE__)();                 \
+    static int                                                     \
     _nupy_line( ::nupy::line<__LINE__> l, char* buf, size_t bufsz) \
     { return ::nupy::member(l, &_nupy_this::M, #M, buf, bufsz); }  \
-    __typeof__(_nupy_this::BOOST_PP_CAT(_nupy_member_,__LINE__)()) M
+    template<size_t _nupySz>                                       \
+    static void _nupy_size( ::nupy::line<__LINE__> )               \
+    { _nupy_this::_nupy_size<(_nupySz +                            \
+        sizeof(::nupy::member_size(&_nupy_this::M)))>(             \
+        ::nupy::next_line<_nupy_this,__LINE__>::type() ); }        \
+    __typeof__(_nupy_this::BOOST_PP_CAT(_nupy_member_,__LINE__)()) \
+    M
 
 #define NUPY_END() \
-    static void _nupy_end( ::boost::mpl::identity<_nupy_this> ) {} \
-    static int \
-    _nupy_line( ::nupy::line<__LINE__>, char* buf, size_t bufsz) \
-    { return 0; }
+    static void _nupy_end( ::boost::mpl::identity<_nupy_this> )    \
+    {}                                                             \
+    static int                                                     \
+    _nupy_line( ::nupy::line<__LINE__>, char* buf, size_t bufsz)   \
+    { return 0; }                                                  \
+    template<size_t _nupySz>                                       \
+    static void _nupy_size( ::nupy::line<__LINE__> )               \
+    { BOOST_MPL_ASSERT_RELATION(_nupySz,==,sizeof(_nupy_this)); }
 
 #endif /* #if !defined(__cplusplus) */
 
