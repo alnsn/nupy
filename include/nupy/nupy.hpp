@@ -278,16 +278,15 @@ namespace nupy {
             return len;
         rv += len;
 
-        if(complete) {
-            if(len == 0) {
-                /* empty class => dtype = "[]" */
-                if((len = snprintf(buf, bufsz, "]")) < 0)
-                    return len;
-                rv += len;
-            } else if(len + 0u < bufsz) {
-                assert(buf[len - 1] == ',');
-                buf[len - 1] = ']';
-            }
+        /*
+         * check that C has some members, empty class
+         * should trigger an assert at compile-time:
+         */
+        assert(len > 0);
+
+        if(complete && len + 0u < bufsz) {
+            assert(buf[len - 1] == ',');
+            buf[len - 1] = ']';
         }
 
         return rv;
