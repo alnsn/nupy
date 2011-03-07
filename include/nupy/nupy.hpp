@@ -29,18 +29,16 @@
 #ifndef FILE_nupy_nupy_h_INCLUDED
 #define FILE_nupy_nupy_h_INCLUDED
 
-#include <stddef.h>
-
 #if !defined(__cplusplus)
 
 #define NUPY_BEGIN(C)
 #define NUPY_END()
-#define NUPY_BASE(C)
 #define NUPY_MEMBER(M) M
 
 #else
 
 #include <assert.h>
+#include <stddef.h>
 #include <stdio.h>
 
 #include <boost/mpl/assert.hpp>
@@ -57,7 +55,7 @@
 #include <boost/type_traits/remove_cv.hpp>
 #include <boost/utility/enable_if.hpp>
 
-#define NUPY_ENDIAN_SYM '<'
+#define NUPY_ENDIAN_SYM "<"
 
 namespace nupy {
 
@@ -162,7 +160,7 @@ namespace nupy {
     {
         static int copy(char* buf, size_t bufsz)
         {
-            return snprintf(buf, bufsz, "'%c%c%zu'", NUPY_ENDIAN_SYM,
+            return snprintf(buf, bufsz, "'" NUPY_ENDIAN_SYM "%c%zu'",
                 boost::is_signed<T>::value ? 'i' : 'u', sizeof(T));
         }
     };
@@ -176,7 +174,8 @@ namespace nupy {
     {
         static int copy(char* buf, size_t bufsz)
         {
-            return snprintf(buf, bufsz, "'%cf%zu'", NUPY_ENDIAN_SYM, sizeof(T));
+            return snprintf(buf, bufsz, "'" NUPY_ENDIAN_SYM "%cf%zu'",
+                sizeof(T));
         }
     };
 
@@ -250,7 +249,7 @@ namespace nupy {
     };
 
     /* C class declaration starts at line L */
-    template<class C, int L>
+    template<int L, class C>
     int
     dtype(char* buf, size_t bufsz, bool complete)
     {
@@ -292,9 +291,9 @@ namespace nupy {
         return rv;
     }
 
-    template<class C, class B, int L>
+    template<int L, class C, class B>
     inline int
-    base(line<L>, char* buf, size_t bufsz)
+    base(char* buf, size_t bufsz)
     {
         int len, rv = 0;
         
@@ -317,9 +316,9 @@ namespace nupy {
         return rv;
     }
 
-    template<class C, class T, int L>
+    template<int L, class C, class T>
     inline int
-    member(line<L>, T C::*, char const* name, char* buf, size_t bufsz)
+    member(T C::*, char const* name, char* buf, size_t bufsz)
     {
         int len, rv = 0;
         
@@ -381,14 +380,14 @@ namespace nupy {
     typedef C _nupy_this; static int _nupy_line( ::nupy::noline ); \
     static int _nupy_dtype(char* buf, size_t bufsz, bool complete) \
     { C::_nupy_size<0>( ::nupy::next_line<C,__LINE__>::type() );   \
-      return ::nupy::dtype<C,__LINE__>(buf, bufsz, complete); }    \
+      return ::nupy::dtype<__LINE__,C>(buf, bufsz, complete); }    \
     static int nupy_dtype(char* buf, size_t bufsz)                 \
     { return _nupy_dtype(buf, bufsz, true); }
 
 #define NUPY_BASE(C) \
     static int                                                     \
     _nupy_line( ::nupy::line<__LINE__> l, char* buf, size_t bufsz) \
-    { return ::nupy::base<_nupy_this,C>(l, buf, bufsz); }          \
+    { return ::nupy::base<__LINE__,_nupy_this,C>(buf, bufsz); }    \
     template<size_t _nupySz>                                       \
     static void _nupy_size( ::nupy::line<__LINE__> )               \
     { _nupy_this::_nupy_size<(sizeof(C) + _nupySz)>(               \
@@ -398,7 +397,8 @@ namespace nupy {
     static BOOST_PP_CAT(_nupy_member_,__LINE__)();                 \
     static int                                                     \
     _nupy_line( ::nupy::line<__LINE__> l, char* buf, size_t bufsz) \
-    { return ::nupy::member(l, &_nupy_this::M, #M, buf, bufsz); }  \
+    { return ::nupy::member<__LINE__,_nupy_this>(                  \
+        &_nupy_this::M, #M, buf, bufsz); }                         \
     template<size_t _nupySz>                                       \
     static void _nupy_size( ::nupy::line<__LINE__> )               \
     { _nupy_this::_nupy_size<(_nupySz +                            \
