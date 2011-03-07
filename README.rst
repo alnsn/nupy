@@ -6,6 +6,8 @@ a class or a struct.
 
 For example, the following definition of the struct Line:
 
+::
+
 	struct Line
 	{
 	    NUPY_BEGIN(Line)
@@ -26,6 +28,7 @@ libc. All other dependencies are C++ metaprogramming stuff.
 
 The function would return a dtype for an object of struct Line:
 
+::
 	"[('start','<f8',(2)),('end','<f8',(2)),('note','|S16')]"
 
 In plain C NUPY_BEGIN(class) and NUPY_END() evaluate to nothing
@@ -48,9 +51,9 @@ supports __typeof__.
 The library is header-only. It depends on the following boost
 libraries (all header-only):
 
-	enable_if
-	mpl
-	preprocessor
-	type_traits
+- enable_if
+- mpl
+- preprocessor
+- type_traits
 
 At the moment, the library does not support big endian architectures.
