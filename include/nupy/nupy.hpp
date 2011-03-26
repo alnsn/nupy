@@ -332,6 +332,15 @@ namespace nupy {
         return rv;
     }
 
+    /* helper for _nupy_size */
+    template<size_t Sz, int L, class C>
+    inline void
+    next_size()
+    {
+        typename next_line<C,L>::type next;
+        C::template _nupy_size<Sz>(next);
+    }
+
     template<int L, class C, class T>
     inline int
     member(T C::*, char const *name, char *buf, size_t bufsz)
@@ -395,19 +404,19 @@ namespace nupy {
 #define NUPY_BEGIN(C) \
     typedef C _nupy_this; static int _nupy_line( ::nupy::noline ); \
     static int _nupy_dtype(char *buf, size_t bufsz, bool complete) \
-    { C::_nupy_size<0>( ::nupy::next_line<C,__LINE__>::type() );   \
-      return ::nupy::dtype<__LINE__,C>(buf, bufsz, complete); }    \
+    { ::nupy::next_size< 0,__LINE__,C >();                         \
+      return ::nupy::dtype< __LINE__,C >(buf, bufsz, complete); }  \
     static int nupy_dtype(char *buf, size_t bufsz)                 \
     { return _nupy_dtype(buf, bufsz, true); }
 
 #define NUPY_BASE(C) \
     static int                                                     \
     _nupy_line( ::nupy::line<__LINE__> l, char *buf, size_t bufsz) \
-    { return ::nupy::base<__LINE__,_nupy_this,C>(buf, bufsz); }    \
+    { return ::nupy::base< __LINE__,_nupy_this,C >(buf, bufsz); }  \
     template<size_t _nupySz>                                       \
     static void _nupy_size( ::nupy::line<__LINE__> )               \
-    { _nupy_this::_nupy_size<(sizeof(C) + _nupySz)>(               \
-        ::nupy::next_line<_nupy_this,__LINE__>::type() ); }
+    { ::nupy::next_size<                                           \
+        (sizeof(C) + _nupySz),__LINE__,_nupy_this>(); }
 
 #define NUPY_MEMBER(M) \
     static BOOST_PP_CAT(_nupy_member_,__LINE__)();                 \
@@ -417,9 +426,9 @@ namespace nupy {
         &_nupy_this::M, #M, buf, bufsz); }                         \
     template<size_t _nupySz>                                       \
     static void _nupy_size( ::nupy::line<__LINE__> )               \
-    { _nupy_this::_nupy_size<(_nupySz +                            \
-        sizeof(::nupy::member_size(&_nupy_this::M)))>(             \
-        ::nupy::next_line<_nupy_this,__LINE__>::type() ); }        \
+    { ::nupy::next_size<(_nupySz +                                 \
+        sizeof(::nupy::member_size(&_nupy_this::M))),              \
+        __LINE__,_nupy_this>(); }                                  \
     __typeof__(_nupy_this::BOOST_PP_CAT(_nupy_member_,__LINE__)()) \
     M
 
