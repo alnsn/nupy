@@ -31,9 +31,10 @@
 
 #if !defined(__cplusplus)
 
-#define NUPY_BEGIN(C)
-#define NUPY_END()
-#define NUPY_MEMBER(M) M
+#define nupyClass(C)
+/* no nupyBase(C) in nupy-c-api */
+#define nupyEnd
+#define nupyM(M) M
 
 #else
 
@@ -261,7 +262,7 @@ namespace nupy {
     /*
      * start (complete == true) or continue (complete == false)
      * a chain of _nupy_line calls from C::nupy_dtype(buf, bufsz)
-     * or from NUPY_BASE(C), respectively
+     * or from nupyBase(C), respectively
      */
     template<int L, class C>
     int
@@ -305,7 +306,7 @@ namespace nupy {
         return rv;
     }
 
-    /* continue a chain of _nupy_line calls from NUPY_BASE(B) */
+    /* continue a chain of _nupy_line calls from nupyBase(B) */
     template<int L, class C, class B>
     inline int
     base(char *buf, size_t bufsz)
@@ -400,7 +401,7 @@ namespace nupy {
     }
 }
 
-#define NUPY_BEGIN(C) \
+#define nupyClass(C) \
     typedef C _nupy_this; static int _nupy_line( ::nupy::noline ); \
     static int _nupy_dtype(char *buf, size_t bufsz, bool complete) \
     { ::nupy::next_size< 0,__LINE__,C >();                         \
@@ -408,7 +409,7 @@ namespace nupy {
     static int nupy_dtype(char *buf, size_t bufsz)                 \
     { return _nupy_dtype(buf, bufsz, true); }
 
-#define NUPY_BASE(C) \
+#define nupyBase(C) \
     static int                                                     \
     _nupy_line( ::nupy::line<__LINE__> l, char *buf, size_t bufsz) \
     { return ::nupy::base< __LINE__,_nupy_this,C >(buf, bufsz); }  \
@@ -417,7 +418,7 @@ namespace nupy {
     { ::nupy::next_size<                                           \
         (sizeof(C) + _nupySz),__LINE__,_nupy_this>(); }
 
-#define NUPY_MEMBER(M) \
+#define nupyM(M) \
     static BOOST_PP_CAT(_nupy_member_,__LINE__)();                 \
     static int                                                     \
     _nupy_line( ::nupy::line<__LINE__> l, char *buf, size_t bufsz) \
@@ -431,7 +432,7 @@ namespace nupy {
     __typeof__(_nupy_this::BOOST_PP_CAT(_nupy_member_,__LINE__)()) \
     M
 
-#define NUPY_END() \
+#define nupyEnd \
     static void _nupy_end( ::boost::mpl::identity<_nupy_this> )    \
     {}                                                             \
     static int                                                     \

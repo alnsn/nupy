@@ -9,13 +9,13 @@ Expose C/C++ structs to numpy
 SYNOPSIS
 ========
 
-    #define NUPY_BEGIN(T)  begin a declaration of T
+    #define nupyStruct(T) begin a declaration of struct ``T``
 
-    #define NUPY_END()     end a declaration
+    #define nupyEnd       end a declaration
 
-    #define NUPY_BASE(T)   declare a base T - C++ only
+    #define nupyBase(T)   declare a base class ``T`` - C++ only
 
-    #define NUPY_MEMBER(m) declare a member m
+    #define nupyM(M)      declare a member ``M``
 
 DESCRIPTION
 ===========
@@ -34,24 +34,24 @@ For example, C/C++ ``struct Line``
 		char   note [16];
 	};
 
-can be "decorated" by ``NUPY_BEGIN(Line)`` and ``NUPY_END()``
-macros and all members can be wrapped by ``NUPY_MEMBER(m)``
+can be "decorated" by ``nupyStruct(Line)`` and ``nupyEnd``
+macros and all members can be wrapped by ``nupyM(m)``
 
 ::
 
 	struct Line
 	{
-		NUPY_BEGIN(Line)
+		nupyStruct(Line)
 		
-		double NUPY_MEMBER(start) [2];
-		double NUPY_MEMBER(end  ) [2];
-		char   NUPY_MEMBER(note ) [16];
+		double nupyM(start) [2];
+		double nupyM(end  ) [2];
+		char   nupyM(note ) [16];
 		
-		NUPY_END()
+		nupyEnd
 	};
 
-In plain C ``NUPY_BEGIN(class)`` and ``NUPY_END()`` evaluate to nothing
-and ``NUPY_MEMBER(m)`` evaluates to ``m`` producing a struct identical
+In plain C ``nupyStruct(T)`` and ``nupyEnd`` evaluate to nothing
+and ``nupyM(M)`` evaluates to ``M`` producing a struct identical
 to the original.
 
 In C++, the second definition generates ``nupy_dtype`` static
@@ -82,18 +82,18 @@ In fact, ``nupy_dtype`` uses only ``snprintf`` from ``-lc``. All other
 dependencies are C++ metaprogramming stuff.
 
 No padding between members or at the end are allowed. If there is
-a mismatch between a total size of members wrapped by ``NUPY_MEMBER(m)``
+a mismatch between a total size of members wrapped by ``nupyM(M)``
 and a size of a struct, compile-time assert will be triggered.
 
-Class inheritance is supported with ``NUPY_BASE(class)``. There is no
-compile-time check to detect a wrong order of ``NUPY_BASE(class)``
+Class inheritance is supported with ``nupyBase(T)``. There is no
+compile-time check to detect a wrong order of ``nupyBase(T)``
 for a class with multiple bases.
 
 Only one member declaration per line is allowed.
 
 Compile-time complexity of C++ code is proportional to a number of
-members and it also increases as a distance between ``NUPY_BEGIN(class)``
-and ``NUPY_END()`` increases (even lines with comments count!).
+members and it also increases as a distance between ``nupyStruct(T)``
+and ``nupyEnd`` increases (even lines with comments count!).
 You may need to change a default value of template depth to
 compile big structs.
 
