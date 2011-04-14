@@ -179,8 +179,7 @@ namespace nupy {
     {
         static int copy(char *buf, size_t bufsz)
         {
-            return snprintf(buf, bufsz, "'" NUPY_ENDIAN_SYM "%cf%zu'",
-                sizeof(T));
+            return snprintf(buf, bufsz, "'" NUPY_ENDIAN_SYM "f%zu'", sizeof(T));
         }
     };
 
