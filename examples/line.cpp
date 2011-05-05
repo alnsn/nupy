@@ -3,13 +3,13 @@
 template<int D>
 struct Line
 {
-    nupyClass(Line<D>)
+    nupyStruct(Line<D>)
 
     double nupyM(start) [D];
     double nupyM(end  ) [D];
     char   nupyM(note ) [16];
 
-    nupyEnd
+    nupyEnd()
 };
 
 int main()

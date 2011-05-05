@@ -11,7 +11,7 @@ SYNOPSIS
 
     #define nupyStruct(T) begin a declaration of struct ``T``
 
-    #define nupyEnd       end a declaration
+    #define nupyEnd()     end a declaration
 
     #define nupyBase(T)   declare a base class ``T`` - C++ only
 
@@ -34,7 +34,7 @@ For example, C/C++ ``struct Line``
 		char   note [16];
 	};
 
-can be "decorated" by ``nupyStruct(Line)`` and ``nupyEnd``
+can be "decorated" by ``nupyStruct(Line)`` and ``nupyEnd()``
 macros and all members can be wrapped by ``nupyM(m)``
 
 ::
@@ -47,10 +47,10 @@ macros and all members can be wrapped by ``nupyM(m)``
 		double nupyM(end  ) [2];
 		char   nupyM(note ) [16];
 		
-		nupyEnd
+		nupyEnd()
 	};
 
-In plain C ``nupyStruct(T)`` and ``nupyEnd`` evaluate to nothing
+In plain C ``nupyStruct(T)`` and ``nupyEnd()`` evaluate to nothing
 and ``nupyM(M)`` evaluates to ``M`` producing a struct identical
 to the original.
 
@@ -93,7 +93,7 @@ Only one member declaration per line is allowed.
 
 Compile-time complexity of C++ code is proportional to a number of
 members and it also increases as a distance between ``nupyStruct(T)``
-and ``nupyEnd`` increases (even lines with comments count!).
+and ``nupyEnd()`` increases (even lines with comments count!).
 You may need to change a default value of template depth to
 compile big structs.
 

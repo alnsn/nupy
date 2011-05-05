@@ -31,9 +31,9 @@
 
 #if !defined(__cplusplus)
 
-#define nupyClass(C)
+#define nupyStruct(C)
 /* no nupyBase(C) in nupy-c-api */
-#define nupyEnd
+#define nupyEnd()
 #define nupyM(M) M
 
 #else
@@ -75,7 +75,7 @@ namespace nupy {
         typedef char (&type)[N];
     };
 
-    /* use sizeof(member_size(&C::member)) */
+    /* use like this: sizeof(member_size(&C::member)) */
     template<class C, class T>
     typename type_with_size<sizeof(T)>::type
     member_size(T C::*);
@@ -83,7 +83,7 @@ namespace nupy {
     template<int L>
     struct line_tester
     {
-        static char test(int (*)(line<L>, char*, size_t), int);
+        static char test(int (*)(line<L>, char *, size_t), int);
         static type_with_size<2>::type test(int (*)(noline), ...);
     };
 
@@ -401,7 +401,7 @@ namespace nupy {
     }
 }
 
-#define nupyClass(C) \
+#define nupyStruct(C) \
     typedef C _nupy_this; static int _nupy_line( ::nupy::noline ); \
     static int _nupy_dtype(char *buf, size_t bufsz, bool complete) \
     { ::nupy::next_size< 0,__LINE__,C >();                         \
@@ -432,7 +432,7 @@ namespace nupy {
     __typeof__(_nupy_this::BOOST_PP_CAT(_nupy_member_,__LINE__)()) \
     M
 
-#define nupyEnd \
+#define nupyEnd() \
     static void _nupy_end( ::boost::mpl::identity<_nupy_this> )    \
     {}                                                             \
     static int                                                     \

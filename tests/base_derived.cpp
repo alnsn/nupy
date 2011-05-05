@@ -12,7 +12,7 @@ struct Base
         : c(4)
     {}
 
-    nupyClass(Base)
+    nupyStruct(Base)
 
     char          nupyM(a);
     volatile char nupyM(b) [7];
@@ -20,19 +20,19 @@ struct Base
     const int32_t nupyM(c);
     uint32_t      nupyM(d);
 
-    nupyEnd
+    nupyEnd()
 };
 
 struct Derived : Base
 {
-    nupyClass(Derived)
+    nupyStruct(Derived)
     nupyBase(Base)
 
     float nupyM(x) [2][3][4];
     char  nupyM(y) [8][2];
     Base  nupyM(z) [5];
 
-    nupyEnd
+    nupyEnd()
 };
 
 int main()
