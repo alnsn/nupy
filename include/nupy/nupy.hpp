@@ -45,11 +45,8 @@
 #include <boost/mpl/assert.hpp>
 #include <boost/mpl/eval_if.hpp>
 #include <boost/mpl/identity.hpp>
-#include <boost/mpl/or.hpp>
-#include <boost/mpl/size_t.hpp>
 #include <boost/preprocessor/cat.hpp>
 #include <boost/type_traits/extent.hpp>
-#include <boost/type_traits/is_array.hpp>
 #include <boost/type_traits/is_floating_point.hpp>
 #include <boost/type_traits/is_integral.hpp>
 #include <boost/type_traits/is_same.hpp>
