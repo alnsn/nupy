@@ -45,8 +45,11 @@
 #include <boost/mpl/assert.hpp>
 #include <boost/mpl/eval_if.hpp>
 #include <boost/mpl/identity.hpp>
+#include <boost/mpl/or.hpp>
+#include <boost/mpl/size_t.hpp>
 #include <boost/preprocessor/cat.hpp>
 #include <boost/type_traits/extent.hpp>
+#include <boost/type_traits/is_array.hpp>
 #include <boost/type_traits/is_floating_point.hpp>
 #include <boost/type_traits/is_integral.hpp>
 #include <boost/type_traits/is_same.hpp>
@@ -83,7 +86,7 @@ namespace nupy {
     template<int L>
     struct line_tester
     {
-        static char test(int (*)(line<L>, char *, size_t), int);
+        static char test(int (*)(line<L>, char *, size_t, size_t), int);
         static type_with_size<2>::type test(int (*)(noline), ...);
     };
 
@@ -139,46 +142,49 @@ namespace nupy {
      * float[2] -> "'<f4'"
      * T is a result of basic_type<U>
      */
-    template<class T, class Enable = void>
+    template<class T, bool FAM, class Enable = void>
     struct typestr
     {
-        static int copy(char *buf, size_t bufsz)
+        static int copy(char *buf, size_t bufsz, size_t)
         {
-            return T::_nupy_dtype(buf, bufsz, true);
+            /* XXX Check that T doesn't have FAM member */
+            return T::_nupy_dtype(buf, bufsz, 0, true);
         }
     };
 
-    template<size_t N>
-    struct typestr<char[N],void>
+    template<size_t N, bool FAM>
+    struct typestr<char[N],FAM,void>
     {
-        static int copy(char *buf, size_t bufsz)
+        static int copy(char *buf, size_t bufsz, size_t famsz)
         {
-            return snprintf(buf, bufsz, "'|S%zu'", N);
+            return snprintf(buf, bufsz, "'|S%zu'", (FAM ? famsz : N));
         }
     };
 
-    template<class T>
+    template<class T, bool FAM>
     struct typestr< T
+                  , FAM
                   , typename boost::enable_if<
                             boost::is_integral<T>
                         >::type
                   >
     {
-        static int copy(char *buf, size_t bufsz)
+        static int copy(char *buf, size_t bufsz, size_t)
         {
             return snprintf(buf, bufsz, "'" NUPY_ENDIAN_SYM "%c%zu'",
                 boost::is_signed<T>::value ? 'i' : 'u', sizeof(T));
         }
     };
 
-    template<class T>
+    template<class T, bool FAM>
     struct typestr< T
+                  , FAM
                   , typename boost::enable_if<
                             boost::is_floating_point<T>
                         >::type
                   >
     {
-        static int copy(char *buf, size_t bufsz)
+        static int copy(char *buf, size_t bufsz, size_t)
         {
             return snprintf(buf, bufsz, "'" NUPY_ENDIAN_SYM "f%zu'", sizeof(T));
         }
@@ -201,27 +207,28 @@ namespace nupy {
 
     /*
      * copy a shape of T to buf, e.g.
-     * shapestr<int[4][2]>::copy(buf, bufsz)
+     * shapestr<int[4][2],false>::copy(buf, bufsz, 0)
      * or
-     * shapestr<char[4][2][8]>::copy(buf, bufsz)
+     * shapestr<char[4][2][8],false>::copy(buf, bufsz, 0)
      * will copy ",(4,2)" to buf
      */
     template< class T
-            , size_t N = 0                   /* current dimension    */
-            , size_t R = type_rank<T>::value /* remaining dimensions */
+            , bool FAM                       /* flexible-array member? */
+            , size_t N = 0                   /* current dimension      */
+            , size_t R = type_rank<T>::value /* remaining dimensions   */
             >
     struct shapestr
     {
-        static int copy(char *buf, size_t bufsz)
+        static int copy(char *buf, size_t bufsz, size_t famsz)
         {
             int len, rv = 0;
 
-            if(N == 0) {
-                if((len = snprintf(buf, bufsz, ",(")) < 0)
+            if (N == 0) {
+                if ((len = snprintf(buf, bufsz, ",(")) < 0)
                     return len;
                 rv += len;
 
-                if(len + 0u < bufsz) {
+                if (len + 0u < bufsz) {
                     buf += len;
                     bufsz -= len;
                 } else {
@@ -230,19 +237,20 @@ namespace nupy {
             }
 
             char const *fmt = (R == 1) ? "%zu)" : "%zu,";
-            size_t const extent = boost::extent<T,N>::value;
-            if((len = snprintf(buf, bufsz, fmt, extent)) < 0)
+            size_t const extent =
+                (FAM && N == 0) ? famsz : boost::extent<T,N>::value;
+            if ((len = snprintf(buf, bufsz, fmt, extent)) < 0)
                 return len;
             rv += len;
 
-            if(len + 0u < bufsz) {
+            if (len + 0u < bufsz) {
                 buf += len;
                 bufsz -= len;
             } else {
                 bufsz = 0;
             }
 
-            if((len = shapestr<T,(N+1),(R-1)>::copy(buf, bufsz)) < 0)
+            if ((len = shapestr<T,FAM,(N+1),(R-1)>::copy(buf, bufsz, 0)) < 0)
                 return len;
             rv += len;
 
@@ -250,10 +258,10 @@ namespace nupy {
         }
     };
 
-    template<class T, size_t N>
-    struct shapestr<T,N,0>
+    template<class T, bool FAM, size_t N>
+    struct shapestr<T,FAM,N,0>
     {
-        static int copy(char *buf, size_t bufsz)
+        static int copy(char *, size_t, size_t)
         {
             return 0;
         }
@@ -261,12 +269,12 @@ namespace nupy {
 
     /*
      * start (complete == true) or continue (complete == false)
-     * a chain of _nupy_line calls from C::nupy_dtype(buf, bufsz)
+     * a chain of _nupy_line calls from C::nupy_dtype(buf, bufsz, famsz)
      * or from nupyBase(C), respectively
      */
     template<int L, class C>
     int
-    dtype(char *buf, size_t bufsz, bool complete)
+    dtype(char *buf, size_t bufsz, size_t famsz, bool complete)
     {
         int len, rv = 0;
 
@@ -274,12 +282,12 @@ namespace nupy {
         boost::mpl::identity<typename C::_nupy_this> id;
         C::_nupy_end(id);
 
-        if(complete) {
-            if((len = snprintf(buf, bufsz, "[")) < 0)
+        if (complete) {
+            if ((len = snprintf(buf, bufsz, "[")) < 0)
                 return len;
             rv += len;
 
-            if(len + 0u < bufsz) {
+            if (len + 0u < bufsz) {
                 buf += len;
                 bufsz -= len;
             } else {
@@ -288,7 +296,7 @@ namespace nupy {
         }
 
         typename next_line<C,L>::type next;
-        if((len = C::_nupy_line(next, buf, bufsz)) < 0)
+        if ((len = C::_nupy_line(next, buf, bufsz, famsz)) < 0)
             return len;
         rv += len;
 
@@ -298,7 +306,7 @@ namespace nupy {
          */
         assert(len > 0);
 
-        if(complete && len + 0u < bufsz) {
+        if (complete && len + 0u < bufsz) {
             assert(buf[len - 1] == ',');
             buf[len - 1] = ']';
         }
@@ -313,11 +321,11 @@ namespace nupy {
     {
         int len, rv = 0;
 
-        if((len = B::_nupy_dtype(buf, bufsz, false)) < 0)
+        if ((len = B::_nupy_dtype(buf, bufsz, 0, false)) < 0)
             return len;
         rv += len;
 
-        if(len + 0u < bufsz) {
+        if (len + 0u < bufsz) {
             buf += len;
             bufsz -= len;
         } else {
@@ -325,7 +333,7 @@ namespace nupy {
         }
 
         typename next_line<C,L>::type next;
-        if((len = C::_nupy_line(next, buf, bufsz)) < 0)
+        if ((len = C::_nupy_line(next, buf, bufsz, 0)) < 0)
             return len;
         rv += len;
 
@@ -341,17 +349,21 @@ namespace nupy {
         C::template _nupy_size<Sz>(next);
     }
 
-    template<int L, class C, class T>
+    template<class C, int L, bool FAM, /* deduced: */ class T>
     inline int
-    member(T C::*, char const *name, char *buf, size_t bufsz)
+    member(T C::*, char const *name, char *buf, size_t bufsz, size_t famsz)
     {
+        typedef typename boost::extent<T,0>::type e0;
+
+        BOOST_MPL_ASSERT_RELATION(e0::value >= 1 || !FAM, ==, true);
+
         int len, rv = 0;
 
-        if((len = snprintf(buf, bufsz, "('%s',", name)) < 0)
+        if ((len = snprintf(buf, bufsz, "('%s',", name)) < 0)
             return len;
         rv += len;
 
-        if(len + 0u < bufsz) {
+        if (len + 0u < bufsz) {
             buf += len;
             bufsz -= len;
         } else {
@@ -359,33 +371,33 @@ namespace nupy {
         }
 
         typedef typename basic_type<T>::type basic;
-        if((len = typestr<basic>::copy(buf, bufsz)) < 0)
+        if ((len = typestr<basic,FAM>::copy(buf, bufsz, famsz)) < 0)
             return len;
         rv += len;
 
-        if(len + 0u < bufsz) {
+        if (len + 0u < bufsz) {
             buf += len;
             bufsz -= len;
         } else {
             bufsz = 0;
         }
 
-        if((len = shapestr<T>::copy(buf, bufsz)) < 0)
+        if ((len = shapestr<T,FAM>::copy(buf, bufsz, famsz)) < 0)
             return len;
         rv += len;
 
-        if(len + 0u < bufsz) {
+        if (len + 0u < bufsz) {
             buf += len;
             bufsz -= len;
         } else {
             bufsz = 0;
         }
 
-        if((len = snprintf(buf, bufsz, "),")) < 0)
+        if ((len = snprintf(buf, bufsz, "),")) < 0)
             return len;
         rv += len;
 
-        if(len + 0u < bufsz) {
+        if (len + 0u < bufsz) {
             buf += len;
             bufsz -= len;
         } else {
@@ -393,7 +405,7 @@ namespace nupy {
         }
 
         typename next_line<C,L>::type next;
-        if((len = C::_nupy_line(next, buf, bufsz)) < 0)
+        if ((len = C::_nupy_line(next, buf, bufsz, famsz)) < 0)
             return len;
         rv += len;
 
@@ -402,41 +414,52 @@ namespace nupy {
 }
 
 #define nupyStruct(C) \
-    typedef C _nupy_this; static int _nupy_line( ::nupy::noline ); \
-    static int _nupy_dtype(char *buf, size_t bufsz, bool complete) \
-    { ::nupy::next_size< 0,__LINE__,C >();                         \
-      return ::nupy::dtype< __LINE__,C >(buf, bufsz, complete); }  \
-    static int nupy_dtype(char *buf, size_t bufsz)                 \
-    { return _nupy_dtype(buf, bufsz, true); }
+    typedef C _nupy_this; static int _nupy_line( ::nupy::noline );       \
+    static int                                                           \
+    _nupy_dtype(char *buf, size_t bufsz, size_t famsz, bool complete)    \
+    { ::nupy::next_size<0,__LINE__,C>();                                 \
+      return ::nupy::dtype<__LINE__,C>(buf, bufsz, famsz, complete); }   \
+    static int                                                           \
+    nupy_dtype(char *buf, size_t bufsz, size_t famsz = 0)                \
+    { return _nupy_dtype(buf, bufsz, famsz, true); }
 
 #define nupyBase(C) \
-    static int                                                     \
-    _nupy_line( ::nupy::line<__LINE__> l, char *buf, size_t bufsz) \
-    { return ::nupy::base< __LINE__,_nupy_this,C >(buf, bufsz); }  \
-    template<size_t _nupySz>                                       \
-    static void _nupy_size( ::nupy::line<__LINE__> )               \
-    { ::nupy::next_size<                                           \
-        (sizeof(C) + _nupySz),__LINE__,_nupy_this>(); }
+    static int                                                           \
+    _nupy_line( ::nupy::line<__LINE__>, char *buf, size_t bufsz, size_t) \
+    { return ::nupy::base<__LINE__,_nupy_this,C>(buf, bufsz); }          \
+    template<size_t _nupySz>                                             \
+    static void _nupy_size( ::nupy::line<__LINE__> )                     \
+    { ::nupy::next_size<(sizeof(C)+_nupySz),__LINE__,_nupy_this>(); }
 
 #define nupyM(M) \
-    static BOOST_PP_CAT(_nupy_member_,__LINE__)();                 \
-    static int                                                     \
-    _nupy_line( ::nupy::line<__LINE__> l, char *buf, size_t bufsz) \
-    { return ::nupy::member<__LINE__,_nupy_this>(                  \
-        &_nupy_this::M, #M, buf, bufsz); }                         \
-    template<size_t _nupySz>                                       \
-    static void _nupy_size( ::nupy::line<__LINE__> )               \
-    { ::nupy::next_size<(_nupySz +                                 \
-        sizeof(::nupy::member_size(&_nupy_this::M))),              \
-        __LINE__,_nupy_this>(); }                                  \
-    __typeof__(_nupy_this::BOOST_PP_CAT(_nupy_member_,__LINE__)()) \
-    M
+    static BOOST_PP_CAT(_nupy_member_,__LINE__)();                             \
+    static int                                                                 \
+    _nupy_line( ::nupy::line<__LINE__>, char *buf, size_t bufsz, size_t famsz) \
+    { return ::nupy::member<_nupy_this,__LINE__,false>( &_nupy_this::M, #M,    \
+                 buf, bufsz, famsz); }                                         \
+    template<size_t _nupySz>                                                   \
+    static void _nupy_size( ::nupy::line<__LINE__> )                           \
+    { enum { _nupy_msz = sizeof(::nupy::member_size(&_nupy_this::M)) };        \
+      ::nupy::next_size<(_nupySz+_nupy_msz),__LINE__,_nupy_this>(); }          \
+    __typeof__(_nupy_this::BOOST_PP_CAT(_nupy_member_,__LINE__)()) M
+
+#define nupyFAM(M) \
+    static BOOST_PP_CAT(_nupy_member_,__LINE__)();                             \
+    static int                                                                 \
+    _nupy_line( ::nupy::line<__LINE__>, char *buf, size_t bufsz, size_t famsz) \
+    { return ::nupy::member<_nupy_this,__LINE__,true>( &_nupy_this::M, #M,     \
+                 buf, bufsz, famsz); }                                         \
+    template<size_t _nupySz>                                                   \
+    static void _nupy_size( ::nupy::line<__LINE__> )                           \
+    { enum { _nupy_msz = sizeof(::nupy::member_size(&_nupy_this::M)) };        \
+      ::nupy::next_size<(_nupySz+_nupy_msz),__LINE__,_nupy_this>();            \
+      BOOST_MPL_ASSERT_RELATION(_nupySz+_nupy_msz,==,sizeof(_nupy_this)); }    \
+    __typeof__(_nupy_this::BOOST_PP_CAT(_nupy_member_,__LINE__)()) M
 
 #define nupyEnd() \
-    static void _nupy_end( ::boost::mpl::identity<_nupy_this> )    \
-    {}                                                             \
+    static void _nupy_end( ::boost::mpl::identity<_nupy_this> ) {} \
     static int                                                     \
-    _nupy_line( ::nupy::line<__LINE__>, char *buf, size_t bufsz)   \
+    _nupy_line( ::nupy::line<__LINE__>, char *buf, size_t, size_t) \
     { return 0; }                                                  \
     template<size_t _nupySz>                                       \
     static void _nupy_size( ::nupy::line<__LINE__> )               \
