@@ -3,7 +3,6 @@
 #include <inttypes.h>
 #include <string.h>
 #include <stdlib.h>
-#include <err.h>
 
 #include <boost/shared_array.hpp>
 
@@ -47,14 +46,15 @@ test_base_derived(void)
     const char expected[] = "[('a','|S1'),('b','|S7'),('c','<i4'),('d','<u4'),('x','<f4',(2,3,4)),('y','|S2',(8)),('z',[('a','|S1'),('b','|S7'),('c','<i4'),('d','<u4')],(5))]";
 
     const size_t bufsz = sizeof(expected);
-    boost::shared_array<char> buf(new char[bufsz]);
+    char buf[bufsz];
 
-    const int len = Derived::nupy_dtype(buf.get(), bufsz);
+    const int len = Derived::nupy_dtype(buf, bufsz);
 
     CHECK(len + 1u == bufsz);
+    CHECK(strcmp(buf, expected) == 0);
 
     for(size_t sz = 0; sz <= bufsz; sz++) {
-        char* newbuf = buf.get() + (bufsz - sz);
+        char* newbuf = buf + (bufsz - sz);
         int newlen = Derived::nupy_dtype(newbuf, sz);
 
         CHECK(newlen == len);
