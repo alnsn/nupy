@@ -1,10 +1,16 @@
 #include "nupy/nupy.hpp"
 
+#include <inttypes.h>
 #include <string.h>
 #include <stdlib.h>
 #include <err.h>
 
 #include <boost/shared_array.hpp>
+
+extern "C" {
+#include "tests.h"
+#include "util.h"
+}
 
 struct Base
 {
@@ -35,38 +41,22 @@ struct Derived : Base
     nupyEnd()
 };
 
-int main()
+extern "C" void
+test_base_derived(void)
 {
-    /* XXX use mmap/mprotect */
-    size_t bufsz = 4096;
+    const char expected[] = "[('a','|S1'),('b','|S7'),('c','<i4'),('d','<u4'),('x','<f4',(2,3,4)),('y','|S2',(8)),('z',[('a','|S1'),('b','|S7'),('c','<i4'),('d','<u4')],(5))]";
+
+    const size_t bufsz = sizeof(expected);
     boost::shared_array<char> buf(new char[bufsz]);
 
     const int len = Derived::nupy_dtype(buf.get(), bufsz);
 
-    if(len + 0u >= bufsz)
-        errx(EXIT_FAILURE, "len >= bufsz: %d %zu\n", len, bufsz);
-
-    printf("sizeof(Derived): %zu\n", sizeof(Derived));
-    printf("\"%s\" (%d bytes)\n", buf.get(), len);
-
-    if(len < 2)
-        errx(EXIT_FAILURE, "len < 2: %d\n", len);
-
-    if(len + 0u != strlen(buf.get()))
-        errx(EXIT_FAILURE, "len != strlen(buf.get()): %d %zu\n", len, strlen(buf.get()));
-
-    if(buf[0] != '[')
-        errx(EXIT_FAILURE, "first char != '[': '%c'\n", buf[0]);
-
-    if(buf[len - 1] != ']')
-        errx(EXIT_FAILURE, "last char != ']': '%c'\n", buf[len - 1]);
+    CHECK(len + 1u == bufsz);
 
     for(size_t sz = 0; sz <= bufsz; sz++) {
         char* newbuf = buf.get() + (bufsz - sz);
         int newlen = Derived::nupy_dtype(newbuf, sz);
-        if(newlen != len)
-            errx(EXIT_FAILURE, "newlen != len: %d %d, sz=%zu\n", newlen, len, sz);
-    }
 
-    return EXIT_SUCCESS;
+        CHECK(newlen == len);
+    }
 }

@@ -1,0 +1,3 @@
+The library is header-only and you need to build it only if you want to
+run tests.  Make sure you have mk-configure, pkg-config and boost-headers
+installed and then simply run mkcmake to build the tests.
