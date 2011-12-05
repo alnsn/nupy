@@ -35,6 +35,7 @@
 /* no nupyBase(C) in nupy-c-api */
 #define nupyEnd()
 #define nupyM(M) M
+#define nupyFAM(M) M
 
 #else
 
