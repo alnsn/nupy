@@ -48,6 +48,7 @@
 #include <boost/preprocessor/cat.hpp>
 #include <boost/type_traits/extent.hpp>
 #include <boost/type_traits/integral_promotion.hpp>
+#include <boost/type_traits/is_enum.hpp>
 #include <boost/type_traits/is_floating_point.hpp>
 #include <boost/type_traits/is_integral.hpp>
 #include <boost/type_traits/is_same.hpp>
