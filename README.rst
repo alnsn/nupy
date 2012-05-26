@@ -111,10 +111,10 @@ DEPENDENCIES
 The library is header-only. It depends on the following boost
 libraries (all header-only)
 
-- enable_if
-- mpl
-- preprocessor
-- type_traits
+- ``enable_if``
+- ``mpl``
+- ``preprocessor``
+- ``type_traits``
 
 SEE ALSO
 ========
