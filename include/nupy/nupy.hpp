@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 Alexander Nasonov.
+ * Copyright 2011-2012 Alexander Nasonov.
  *
  * Boost Software License - Version 1.0 - August 17th, 2003
  *
@@ -32,14 +32,13 @@
 #if !defined(__cplusplus)
 
 #define nupyStruct(C)
-/* no nupyBase(C) in nupy-c-api */
+/* No nupyBase(C) in nupy-c-api. */
 #define nupyEnd()
 #define nupyM(M) M
 #define nupyFAM(M) M
 
 #else
 
-#include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
 
@@ -77,7 +76,7 @@ namespace nupy {
         typedef char (&type)[N];
     };
 
-    /* use like this: sizeof(member_size(&C::member)) */
+    /* Use like this: sizeof(member_size(&C::member)). */
     template<class C, class T>
     typename type_with_size<sizeof(T)>::type
     member_size(T C::*);
@@ -119,7 +118,7 @@ namespace nupy {
     };
 
     /*
-     * promote enums, leave other type unchanged
+     * Promote enums, leave other type unchanged.
      */
     template<class T>
     struct basic_nonstr_type
@@ -132,9 +131,9 @@ namespace nupy {
     };
 
     /*
-     * remove cv-qualifiers and extra extents, e.g.
+     * Remove cv-qualifiers and extra extents, e.g.
      * volatile int[4][2] -> int
-     * char[4][2][8]      -> char[8]
+     * char[4][2][8]      -> char[8].
      */
     template<class T>
     struct basic_type
@@ -152,7 +151,7 @@ namespace nupy {
     /*
      * char[16] -> "'|S16'"
      * float[2] -> "'<f4'"
-     * T is a result of basic_type<U>
+     * T is a result of basic_type<U>.
      */
     template<class T, bool FAM, class Enable = void>
     struct typestr
@@ -203,8 +202,8 @@ namespace nupy {
     };
 
     /*
-     * remove the last extent from cv char[A]...[Z] (leave other
-     * types unchanged) and calculate a rank
+     * Remove the last extent from cv char[A]...[Z] (leave other
+     * types unchanged) and calculate a rank.
      */
     template<class T>
     struct type_rank
@@ -218,16 +217,16 @@ namespace nupy {
     };
 
     /*
-     * copy a shape of T to buf, e.g.
+     * Copy a shape of T to buf, e.g.
      * shapestr<int[4][2],false>::copy(buf, bufsz, 0)
      * or
      * shapestr<char[4][2][8],false>::copy(buf, bufsz, 0)
-     * will copy ",(4,2)" to buf
+     * will copy ",(4,2)" to buf.
      */
     template< class T
-            , bool FAM                       /* flexible-array member? */
-            , size_t N = 0                   /* current dimension      */
-            , size_t R = type_rank<T>::value /* remaining dimensions   */
+            , bool FAM                       /* Flexible-array member? */
+            , size_t N = 0                   /* Current dimension.     */
+            , size_t R = type_rank<T>::value /* Remaining dimensions.  */
             >
     struct shapestr
     {
@@ -280,9 +279,9 @@ namespace nupy {
     };
 
     /*
-     * start (complete == true) or continue (complete == false)
+     * Start (complete == true) or continue (complete == false)
      * a chain of _nupy_line calls from C::nupy_dtype(buf, bufsz, famsz)
-     * or from nupyBase(C), respectively
+     * or from nupyBase(C), respectively.
      */
     template<int L, class C>
     int
@@ -290,7 +289,7 @@ namespace nupy {
     {
         int len, rv = 0;
 
-        /* check for the end early */
+        /* Check for the end early. */
         boost::mpl::identity<typename C::_nupy_this> id;
         C::_nupy_end(id);
 
@@ -312,21 +311,20 @@ namespace nupy {
             return len;
         rv += len;
 
-        /*
-         * check that C has some members, empty class
-         * should trigger an assert at compile-time:
-         */
-        assert(len > 0);
 
         if (complete && len + 0u < bufsz) {
-            assert(buf[len - 1] == ',');
+            /*
+             * buf[len-1] is safe because len can be zero only for an
+             * empty class but empty class should trigger an assert at
+             * compile-time.
+             */
             buf[len - 1] = ']';
         }
 
         return rv;
     }
 
-    /* continue a chain of _nupy_line calls from nupyBase(B) */
+    /* Continue a chain of _nupy_line calls from nupyBase(B). */
     template<int L, class C, class B>
     inline int
     base(char *buf, size_t bufsz)
@@ -352,7 +350,7 @@ namespace nupy {
         return rv;
     }
 
-    /* helper for _nupy_size */
+    /* Helper for _nupy_size. */
     template<size_t Sz, int L, class C>
     inline void
     next_size()
