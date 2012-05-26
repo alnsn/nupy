@@ -4,8 +4,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include <boost/shared_array.hpp>
-
 extern "C" {
 #include "tests.h"
 #include "util.h"
