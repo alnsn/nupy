@@ -118,19 +118,6 @@ namespace nupy {
     };
 
     /*
-     * Promote enums, leave other type unchanged.
-     */
-    template<class T>
-    struct basic_nonstr_type
-        : boost::mpl::eval_if<
-            boost::is_enum<T>,
-            boost::integral_promotion<T>,
-            boost::mpl::identity<T>
-            >
-    {
-    };
-
-    /*
      * Remove cv-qualifiers and extra extents, e.g.
      * volatile int[4][2] -> int
      * char[4][2][8]      -> char[8].
@@ -144,7 +131,7 @@ namespace nupy {
         typedef typename boost::mpl::eval_if<
             boost::is_same<nocv,char>,
             basic_str_type<T>,
-            basic_nonstr_type<nocv>
+            boost::mpl::identity<nocv>
             >::type type;
     };
 
@@ -184,6 +171,22 @@ namespace nupy {
         {
             return snprintf(buf, bufsz, "'" NUPY_ENDIAN_SYM "%c%zu'",
                 boost::is_signed<T>::value ? 'i' : 'u', sizeof(T));
+        }
+    };
+
+    template<class T, bool FAM>
+    struct typestr< T
+                  , FAM
+                  , typename boost::enable_if<
+                            boost::is_enum<T>
+                        >::type
+                  >
+    {
+        static int copy(char *buf, size_t bufsz, size_t)
+        {
+            typedef typename boost::integral_promotion<T>::type promoted;
+            return snprintf(buf, bufsz, "'" NUPY_ENDIAN_SYM "%c%zu'",
+                boost::is_signed<promoted>::value ? 'i' : 'u', sizeof(T));
         }
     };
 
