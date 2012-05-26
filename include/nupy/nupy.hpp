@@ -47,7 +47,6 @@
 #include <boost/mpl/identity.hpp>
 #include <boost/preprocessor/cat.hpp>
 #include <boost/type_traits/extent.hpp>
-#include <boost/type_traits/integral_promotion.hpp>
 #include <boost/type_traits/is_enum.hpp>
 #include <boost/type_traits/is_floating_point.hpp>
 #include <boost/type_traits/is_integral.hpp>
@@ -187,9 +186,8 @@ namespace nupy {
     {
         static int copy(char *buf, size_t bufsz, size_t)
         {
-            typedef typename boost::integral_promotion<T>::type promoted;
             return snprintf(buf, bufsz, "'%c%c%zu'", NUPY_ENDIAN_SYM,
-                boost::is_signed<promoted>::value ? 'i' : 'u', sizeof(T));
+                boost::is_signed<T>::value ? 'i' : 'u', sizeof(T));
         }
     };
 
