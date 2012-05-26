@@ -17,6 +17,8 @@ SYNOPSIS
 
     #define nupyM(M)      declare a member ``M``
 
+    #define nupyFAM(M)    declare flexible array member ``M``
+
 DESCRIPTION
 ===========
 
@@ -59,9 +61,9 @@ member function
 
 ::
 
-	int Line::nupy_dtype(const char* str, size_t bufsz);
+	int Line::nupy_dtype(const char* str, size_t bufsz, size_t famsz = 0);
 
-If ``bufsz`` is big enough the function copies ``Line``'s dtype
+If ``bufsz`` is big enough, the function copies ``Line``'s dtype
 to ``buf`` producing a string similar to
 
 ::
