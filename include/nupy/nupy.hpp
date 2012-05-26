@@ -57,7 +57,9 @@
 #include <boost/type_traits/remove_cv.hpp>
 #include <boost/utility/enable_if.hpp>
 
-#define NUPY_ENDIAN_SYM "<"
+#ifndef NUPY_ENDIAN_SYM
+#define NUPY_ENDIAN_SYM '<'
+#endif
 
 namespace nupy {
 
@@ -169,7 +171,7 @@ namespace nupy {
     {
         static int copy(char *buf, size_t bufsz, size_t)
         {
-            return snprintf(buf, bufsz, "'" NUPY_ENDIAN_SYM "%c%zu'",
+            return snprintf(buf, bufsz, "'%c%c%zu'", NUPY_ENDIAN_SYM,
                 boost::is_signed<T>::value ? 'i' : 'u', sizeof(T));
         }
     };
@@ -185,7 +187,7 @@ namespace nupy {
         static int copy(char *buf, size_t bufsz, size_t)
         {
             typedef typename boost::integral_promotion<T>::type promoted;
-            return snprintf(buf, bufsz, "'" NUPY_ENDIAN_SYM "%c%zu'",
+            return snprintf(buf, bufsz, "'%c%c%zu'", NUPY_ENDIAN_SYM,
                 boost::is_signed<promoted>::value ? 'i' : 'u', sizeof(T));
         }
     };
@@ -200,7 +202,7 @@ namespace nupy {
     {
         static int copy(char *buf, size_t bufsz, size_t)
         {
-            return snprintf(buf, bufsz, "'" NUPY_ENDIAN_SYM "f%zu'", sizeof(T));
+            return snprintf(buf, bufsz, "'%cf%zu'", NUPY_ENDIAN_SYM, sizeof(T));
         }
     };
 
