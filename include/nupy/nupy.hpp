@@ -48,6 +48,7 @@
 #include <boost/mpl/identity.hpp>
 #include <boost/preprocessor/cat.hpp>
 #include <boost/type_traits/extent.hpp>
+#include <boost/type_traits/integral_promotion.hpp>
 #include <boost/type_traits/is_floating_point.hpp>
 #include <boost/type_traits/is_integral.hpp>
 #include <boost/type_traits/is_same.hpp>
@@ -118,6 +119,19 @@ namespace nupy {
     };
 
     /*
+     * promote enums, leave other type unchanged
+     */
+    template<class T>
+    struct basic_nonstr_type
+        : boost::mpl::eval_if<
+            boost::is_enum<T>,
+            boost::integral_promotion<T>,
+            boost::mpl::identity<T>
+            >
+    {
+    };
+
+    /*
      * remove cv-qualifiers and extra extents, e.g.
      * volatile int[4][2] -> int
      * char[4][2][8]      -> char[8]
@@ -131,7 +145,7 @@ namespace nupy {
         typedef typename boost::mpl::eval_if<
             boost::is_same<nocv,char>,
             basic_str_type<T>,
-            boost::mpl::identity<nocv>
+            basic_nonstr_type<nocv>
             >::type type;
     };
 

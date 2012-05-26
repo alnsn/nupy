@@ -1,5 +1,5 @@
 PROG=	nupy_tests
-SRCS=	base_derived.cpp fam_c.c fam.cpp util.c main.c
+SRCS=	base_derived.cpp fam_c.c fam.cpp enum.cpp util.c main.c
 
 WARNS=	4
 
